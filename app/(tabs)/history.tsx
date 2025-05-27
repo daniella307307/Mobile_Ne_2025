@@ -8,24 +8,33 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
-  Alert, // Import Alert
+  Alert,
   Keyboard,
 } from 'react-native';
 import tw from 'twrnc';
 import { useExpenses } from '@/hooks/useExpense';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// AsyncStorage is not directly used in this component anymore for user ID
 import { Ionicons } from '@expo/vector-icons';
 import { Expense } from '@/services/expenseService';
-import { useAuth } from '@/hooks/useAuth'; // Import useAuth
+import { useAuth } from '@/hooks/useAuth';
+import { RouteProp, useRoute } from '@react-navigation/native'; // For handling route params
 
 const BUDGET_WARNING_THRESHOLD = 0.8; // 80%
 
+// Define route param types
+type HistoryRouteParams = {
+  openAddModal?: boolean;
+  openSetBudgetModal?: boolean;
+};
+type HistoryScreenRouteProp = RouteProp<{ History: HistoryRouteParams }, 'History'>;
+
+
 const History = () => {
-  // const [userId, setUserId] = useState<string>(''); // We'll get userId from useAuth
-  const { user, updateProfile, loading: authLoading } = useAuth(); // Use auth hook
+  const route = useRoute<HistoryScreenRouteProp>();
+  const { user, updateProfile, loading: authLoading } = useAuth();
   const userId = user?.id ? String(user.id) : '';
 
-  const [modalVisible, setModalVisible] = useState(false);
+  const [addExpenseModalVisible, setAddExpenseModalVisible] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [newExpense, setNewExpense] = useState({
     title: '',
@@ -34,37 +43,35 @@ const History = () => {
     description: '',
   });
 
-  // Budget related state
   const [budgetInputModalVisible, setBudgetInputModalVisible] = useState(false);
   const [budgetInputValue, setBudgetInputValue] = useState<string>('');
-
-  // This effect is no longer needed as userId comes from useAuth
-  // useEffect(() => {
-  //   const loadUser = async () => {
-  //     try {
-  //       const userString = await AsyncStorage.getItem('user');
-  //       const localUser = userString ? JSON.parse(userString) : null;
-  //       if (localUser?.id) setUserId(String(localUser.id));
-  //       else console.error('User ID not found from AsyncStorage');
-  //     } catch (error) {
-  //       console.error('Failed to load user from AsyncStorage:', error);
-  //     }
-  //   };
-  //   if (!user?.id) { // Fallback if useAuth is slow or fails for id
-  //     loadUser();
-  //   }
-  // }, [user?.id]);
 
   const {
     expenses,
     loading: expensesLoading,
     hasMore,
     loadExpenses,
-    refreshExpenses, // Get refreshExpenses
+    refreshExpenses,
     createExpense,
     updateExpense,
     deleteExpense,
-  } = useExpenses(userId); // Pass userId from auth
+  } = useExpenses(userId);
+
+  // Effect to handle route params for opening modals
+  useEffect(() => {
+    if (route.params?.openAddModal) {
+      setNewExpense({ title: '', amount: '', category: '', description: '' });
+      setEditingExpenseId(null);
+      setAddExpenseModalVisible(true);
+      // Reset param to avoid re-triggering (optional, depends on navigation setup)
+      // navigation.setParams({ openAddModal: undefined });
+    }
+    if (route.params?.openSetBudgetModal) {
+      setBudgetInputModalVisible(true);
+      // navigation.setParams({ openSetBudgetModal: undefined });
+    }
+  }, [route.params]);
+
 
   const totalSpent = useMemo(() => {
     return expenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
@@ -74,7 +81,9 @@ const History = () => {
   const remainingBudget = userBudget - totalSpent;
 
   const checkBudgetNotification = (currentTotalSpent: number) => {
-    if (userBudget > 0 && currentTotalSpent >= userBudget * BUDGET_WARNING_THRESHOLD) {
+    if (userBudget <= 0) return; // Don't notify if no budget is set
+
+    if (currentTotalSpent >= userBudget * BUDGET_WARNING_THRESHOLD) {
       if (currentTotalSpent >= userBudget) {
         Alert.alert(
           'Budget Exceeded',
@@ -89,15 +98,8 @@ const History = () => {
     }
   };
 
-  useEffect(() => {
-    // Initial budget check when expenses load or budget changes
-    if (expenses.length > 0 && userBudget > 0) {
-        // Delay slightly to ensure user sees the page before an alert pops up
-        // setTimeout(() => checkBudgetNotification(totalSpent), 1000);
-        // Or only check after a new expense, not on load. This is probably better.
-    }
-  }, [totalSpent, userBudget, expenses.length]);
-
+  // Removed initial budget check on load, notifications are now tied to actions
+  // useEffect(() => { ... }, [totalSpent, userBudget, expenses.length]);
 
   const handleSaveExpense = async () => {
     if (!newExpense.title || !newExpense.amount || !newExpense.category) {
@@ -113,7 +115,6 @@ const History = () => {
     const expenseData = {
       ...newExpense,
       amount: amountValue,
-      // ownerId: userId, // ownerId is now handled by createExpense in the hook
     };
 
     Keyboard.dismiss();
@@ -123,32 +124,21 @@ const History = () => {
         await updateExpense(editingExpenseId, expenseData);
       } else {
         const created = await createExpense(expenseData as Omit<Expense, 'id' | 'createdAt'>);
-        // After creating an expense, check budget
-        // The `expenses` state in `useExpenses` is updated optimistically,
-        // so `totalSpent` will recalculate. We need to ensure `totalSpent` for checkBudgetNotification
-        // reflects the new expense.
-        // A more robust way is to pass the new total directly or re-fetch total.
-        // Since `totalSpent` is derived from `expenses` which is updated by `createExpense`,
-        // we can call checkBudgetNotification after the state updates.
-        // However, state updates might not be immediate.
-        // Let's recalculate for the check:
-        const newTotalSpent = totalSpent + created.amount; // If createExpense returns the new expense
+        const newTotalSpent = totalSpent + created.amount;
         checkBudgetNotification(newTotalSpent);
-
       }
       success = true;
     } catch (error) {
       console.error("Failed to save expense:", error);
-      Alert.alert("Error", "Could not save expense. " + (error as Error).message);
+      Alert.alert("Error", "Could not save expense. " + ((error as Error).message || "Unknown error"));
     }
 
     if (success) {
       setNewExpense({ title: '', amount: '', category: '', description: '' });
       setEditingExpenseId(null);
-      setModalVisible(false);
-      // refreshExpenses(); // Call refreshExpenses after add/edit to get fresh list from server
-      // The optimistic update in useExpenses should already update the list.
-      // Uncomment above if you strictly need server-refreshed data immediately.
+      setAddExpenseModalVisible(false);
+      // Optimistic update should handle list refresh.
+      // refreshExpenses(); // Uncomment if strict server refresh needed
     }
   };
 
@@ -157,10 +147,10 @@ const History = () => {
       title: expense.title,
       amount: String(expense.amount),
       category: expense.category,
-      description: expense.description,
+      description: expense.description || '', // Ensure description is not undefined
     });
     setEditingExpenseId(expense.id ?? null);
-    setModalVisible(true);
+    setAddExpenseModalVisible(true);
   };
 
   const handleDeleteExpense = async (expenseId: string | undefined) => {
@@ -176,11 +166,6 @@ const History = () => {
           onPress: async () => {
             try {
               await deleteExpense(expenseId);
-              // Optionally refresh or rely on optimistic update
-              // refreshExpenses();
-              // Budget check after delete is less common, but you could:
-              // const newTotalSpent = totalSpent - (expenses.find(e => e.id === expenseId)?.amount || 0);
-              // checkBudgetNotification(newTotalSpent);
             } catch (error) {
               console.error("Failed to delete expense:", error);
               Alert.alert("Error", "Could not delete expense.");
@@ -194,7 +179,7 @@ const History = () => {
   const handleSetBudget = async () => {
     const newBudgetValue = parseFloat(budgetInputValue);
     if (isNaN(newBudgetValue) || newBudgetValue < 0) {
-      Alert.alert('Invalid Budget', 'Please enter a valid positive number for your budget.');
+      Alert.alert('Invalid Budget', 'Please enter a valid non-negative number for your budget.');
       return;
     }
     Keyboard.dismiss();
@@ -202,107 +187,118 @@ const History = () => {
       await updateProfile({ budget: newBudgetValue });
       Alert.alert('Budget Updated', `Your new budget is $${newBudgetValue.toFixed(2)}`);
       setBudgetInputModalVisible(false);
-      setBudgetInputValue(''); // Clear input
-      // Check budget immediately with new budget value
-      checkBudgetNotification(totalSpent);
+      // budgetInputValue is pre-filled, no need to clear here unless desired.
+      checkBudgetNotification(totalSpent); // Check with current totalSpent and new budget
     } catch (error) {
       console.error('Failed to update budget:', error);
-      Alert.alert('Error', 'Could not update budget. ' + (error as Error).message);
+      Alert.alert('Error', 'Could not update budget. ' + ((error as Error).message || "Unknown error"));
     }
   };
 
   useEffect(() => {
-    // Pre-fill budget input when user data is available and modal opens
-    if (user?.budget !== undefined) {
+    if (budgetInputModalVisible && user?.budget !== undefined) {
         setBudgetInputValue(String(user.budget));
+    } else if (budgetInputModalVisible) {
+        setBudgetInputValue('0'); // Default to 0 if no budget set yet
     }
   }, [user?.budget, budgetInputModalVisible]);
 
 
-  if (authLoading || (!userId && expensesLoading)) { // Show loading if auth or initial expenses are loading
+  if (authLoading || (!userId && expensesLoading && expenses.length === 0 && userId)) {
     return (
-      <SafeAreaView style={tw`flex-1 justify-center items-center mt-20`}>
-        <ActivityIndicator size="large" />
-        <Text>Loading user data...</Text>
+      <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100`}>
+        <ActivityIndicator size="large" color={tw.color('teal-600')} />
+        <Text style={tw`mt-4 text-teal-700`}>Loading data...</Text>
       </SafeAreaView>
     );
   }
 
-  if (!userId && !authLoading) { // If auth has loaded but no userId (e.g. not logged in)
+  if (!userId && !authLoading) {
     return (
-      <SafeAreaView style={tw`flex-1 justify-center items-center`}>
-        <Text>Please log in to view your expenses.</Text>
-        {/* Optionally add a login button here */}
+      <SafeAreaView style={tw`flex-1 justify-center items-center bg-gray-100 p-5`}>
+        <Ionicons name="log-in-outline" size={48} color={tw.color('teal-500')} />
+        <Text style={tw`text-lg text-gray-700 mt-4 text-center`}>Please log in to manage your expenses.</Text>
+        {/* Optionally add a login button here that navigates to login screen */}
       </SafeAreaView>
     );
   }
-
 
   return (
-    <SafeAreaView style={tw`flex-1 bg-white `}>
+    <SafeAreaView style={tw`flex-1 bg-gray-100 mt-8`}>
       {/* Budget Display and Set Button */}
-      <View style={tw`p-4 border-b border-gray-200 mt-8`}>
-        <View style={tw`flex-row justify-between items-center mb-2`}>
-          <Text style={tw`text-lg font-semibold`}>
-            Budget: ${userBudget.toFixed(2)}
+      <View style={tw`p-4 border-b border-gray-200 bg-white shadow-sm`}>
+        <View style={tw`flex-row justify-between items-center mb-1.5`}>
+          <Text style={tw`text-base font-semibold text-gray-700`}>
+            Monthly Budget: 
+            <Text style={tw`text-teal-600`}> ${userBudget.toFixed(2)}</Text>
           </Text>
           <TouchableOpacity
             onPress={() => setBudgetInputModalVisible(true)}
-            style={tw`bg-green-500 px-3 py-1 rounded`}
+            style={tw`bg-teal-100 px-3 py-1.5 rounded-md active:bg-teal-200`}
           >
-            <Text style={tw`text-white`}>Set Budget</Text>
+            <Text style={tw`text-teal-700 text-xs font-medium`}>Set Budget</Text>
           </TouchableOpacity>
         </View>
-        <Text style={tw`text-md`}>Total Spent: ${totalSpent.toFixed(2)}</Text>
-        <Text style={tw`text-md ${remainingBudget < 0 ? 'text-red-500' : 'text-green-600'}`}>
-          Remaining: ${remainingBudget.toFixed(2)}
-        </Text>
+        <View style={tw`flex-row justify-between`}>
+            <Text style={tw`text-sm text-gray-600`}>Spent: ${totalSpent.toFixed(2)}</Text>
+            <Text style={tw`text-sm font-medium ${remainingBudget < 0 ? 'text-red-500' : 'text-green-600'}`}>
+            Remaining: ${remainingBudget.toFixed(2)}
+            </Text>
+        </View>
         {userBudget > 0 && totalSpent > userBudget && (
-            <Text style={tw`text-sm text-red-600 mt-1`}>You are over budget!</Text>
+            <Text style={tw`text-xs text-red-500 mt-1`}>You are over budget!</Text>
         )}
       </View>
 
       <FlatList
         contentContainerStyle={tw`p-4`}
         data={expenses}
-        keyExtractor={(item) => item.id ?? Math.random().toString()} // Fallback for key if id is somehow missing
+        keyExtractor={(item) => item.id ?? Math.random().toString()}
         renderItem={({ item }) => (
-          <View style={tw`p-4 mb-3 bg-gray-100 rounded shadow`}>
-            <Text style={tw`text-lg font-bold`}>{item.title}</Text>
-            {item.description ? <Text style={tw`text-gray-700`}>{item.description}</Text> : null}
-            <Text style={tw`text-gray-800`}>Amount: ${Number(item.amount).toFixed(2)}</Text>
-            <Text style={tw`text-gray-800`}>Category: {item.category}</Text>
-            <Text style={tw`text-sm text-gray-500 mt-1`}>
-              Date: {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
-            </Text>
-
-            <View style={tw`flex-row mt-3 pt-2 border-t border-gray-200`}>
-              <TouchableOpacity
-                onPress={() => openModalForEdit(item)}
-                style={tw`bg-yellow-400 px-4 py-2 rounded mr-2 flex-1 items-center`}
-              >
-                <Text style={tw`text-white font-semibold`}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleDeleteExpense(item.id)}
-                style={tw`bg-red-500 px-4 py-2 rounded flex-1 items-center`}
-              >
-                <Text style={tw`text-white font-semibold`}>Delete</Text>
-              </TouchableOpacity>
+          <View style={tw`bg-white p-3.5 rounded-lg shadow-sm mb-3`}>
+            <View style={tw`flex-row justify-between items-start`}>
+                <View style={tw`flex-1 mr-2`}>
+                    <Text style={tw`text-base font-semibold text-gray-800`}>{item.title}</Text>
+                    {item.description ? <Text style={tw`text-xs text-gray-500 mt-0.5`}>{item.description}</Text> : null}
+                </View>
+                <Text style={tw`text-base font-bold text-teal-600`}>${Number(item.amount).toFixed(2)}</Text>
+            </View>
+            <View style={tw`flex-row justify-between items-center mt-2 pt-2 border-t border-gray-100`}>
+                <View>
+                    <Text style={tw`text-xs text-gray-500`}>Category: {item.category}</Text>
+                    <Text style={tw`text-xs text-gray-400`}>
+                    Date: {item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'N/A'}
+                    </Text>
+                </View>
+                <View style={tw`flex-row`}>
+                <TouchableOpacity
+                    onPress={() => openModalForEdit(item)}
+                    style={tw`bg-yellow-400 p-2 rounded-md mr-2 active:bg-yellow-500`}
+                >
+                    <Ionicons name="pencil" size={16} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={() => handleDeleteExpense(item.id)}
+                    style={tw`bg-red-500 p-2 rounded-md active:bg-red-600`}
+                >
+                    <Ionicons name="trash-bin" size={16} color="white" />
+                </TouchableOpacity>
+                </View>
             </View>
           </View>
         )}
-        onRefresh={refreshExpenses} // Add pull-to-refresh
-        refreshing={expensesLoading} // Show loading indicator on pull-to-refresh
+        onRefresh={refreshExpenses}
+        refreshing={expensesLoading}
         onEndReached={() => {
           if (hasMore && !expensesLoading) loadExpenses();
         }}
         onEndReachedThreshold={0.5}
-        ListFooterComponent={expensesLoading && expenses.length > 0 ? <ActivityIndicator style={tw`my-4`} size="small" /> : null}
-        ListEmptyComponent={!expensesLoading && expenses.length === 0 ? (
-            <View style={tw`flex-1 justify-center items-center mt-10`}>
-                <Text style={tw`text-gray-500 text-lg`}>No expenses found.</Text>
-                <Text style={tw`text-gray-400`}>Tap the '+' button to add your first expense!</Text>
+        ListFooterComponent={expensesLoading && expenses.length > 0 ? <ActivityIndicator style={tw`my-4`} size="small" color={tw.color('teal-500')} /> : null}
+        ListEmptyComponent={!expensesLoading && expenses.length === 0 && userId ? (
+            <View style={tw`flex-1 justify-center items-center mt-20`}>
+                <Ionicons name="receipt-outline" size={48} color={tw.color('teal-400')} />
+                <Text style={tw`text-gray-600 text-lg mt-3`}>No expenses found.</Text>
+                <Text style={tw`text-gray-400 text-sm`}>Tap the '+' button to add your first one!</Text>
             </View>
         ) : null}
       />
@@ -312,110 +308,110 @@ const History = () => {
         onPress={() => {
           setNewExpense({ title: '', amount: '', category: '', description: '' });
           setEditingExpenseId(null);
-          setModalVisible(true);
+          setAddExpenseModalVisible(true);
         }}
-        style={tw`absolute bottom-6 right-6 bg-blue-500 p-4 rounded-full shadow-lg elevation-5`}
+        style={tw`absolute bottom-5 right-5 bg-teal-600 p-3.5 rounded-full shadow-lg elevation-5`}
       >
-        <Ionicons name="add" size={28} color="white" />
+        <Ionicons name="add" size={26} color="white" />
       </TouchableOpacity>
 
       {/* Modal for Create/Edit Expense */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={addExpenseModalVisible} animationType="slide" transparent onRequestClose={() => setAddExpenseModalVisible(false)}>
         <TouchableOpacity 
-            style={tw`flex-1 justify-center items-center bg-black bg-opacity-50`}
+            style={tw`flex-1 justify-center items-center bg-black bg-opacity-60`}
             activeOpacity={1} 
-            onPressOut={Keyboard.dismiss} // Dismiss keyboard when tapping outside modal content
+            onPressOut={() => { Keyboard.dismiss(); setAddExpenseModalVisible(false);}} // Dismiss modal on outside tap
         >
-          <View style={tw`w-11/12 bg-white p-6 rounded-lg shadow-xl`}>
-            <Text style={tw`text-xl font-bold mb-4 text-center`}>
-              {editingExpenseId ? 'Edit Expense' : 'New Expense'}
-            </Text>
-
-            <TextInput
-              placeholder="Title (e.g., Groceries, Dinner)"
-              value={newExpense.title}
-              onChangeText={(text) => setNewExpense((prev) => ({ ...prev, title: text }))}
-              style={tw`border border-gray-300 px-3 py-2 rounded mb-3 text-base`}
-            />
-            <TextInput
-              placeholder="Amount (e.g., 25.50)"
-              keyboardType="numeric"
-              value={newExpense.amount}
-              onChangeText={(text) => setNewExpense((prev) => ({ ...prev, amount: text }))}
-              style={tw`border border-gray-300 px-3 py-2 rounded mb-3 text-base`}
-            />
-            <TextInput
-              placeholder="Category (e.g., Food, Transport)"
-              value={newExpense.category}
-              onChangeText={(text) => setNewExpense((prev) => ({ ...prev, category: text }))}
-              style={tw`border border-gray-300 px-3 py-2 rounded mb-3 text-base`}
-            />
-            <TextInput
-              placeholder="Description (Optional)"
-              value={newExpense.description}
-              onChangeText={(text) => setNewExpense((prev) => ({ ...prev, description: text }))}
-              style={tw`border border-gray-300 px-3 py-2 rounded mb-4 text-base`}
-              multiline
-            />
-
-            <View style={tw`flex-row justify-end mt-2`}>
-              <TouchableOpacity
-                onPress={() => {
-                  setModalVisible(false);
-                  setNewExpense({ title: '', amount: '', category: '', description: '' });
-                  setEditingExpenseId(null);
-                }}
-                style={tw`px-4 py-2 rounded mr-3`}
-              >
-                <Text style={tw`text-gray-600 font-semibold`}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSaveExpense}
-                style={tw`bg-blue-500 px-6 py-3 rounded shadow`}
-              >
-                <Text style={tw`text-white font-bold`}>
-                  {editingExpenseId ? 'Update' : 'Add Expense'}
+            <TouchableOpacity activeOpacity={1} style={tw`w-11/12 bg-white p-5 rounded-lg shadow-xl max-w-md`}> {/* Prevent content tap from closing */}
+                <Text style={tw`text-lg font-semibold mb-4 text-gray-800 text-center`}>
+                {editingExpenseId ? 'Edit Expense' : 'Add New Expense'}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+
+                <TextInput
+                placeholder="Title (e.g., Groceries)"
+                value={newExpense.title}
+                onChangeText={(text) => setNewExpense((prev) => ({ ...prev, title: text }))}
+                style={tw`border border-gray-300 px-3.5 py-2.5 rounded-md mb-3 text-sm bg-gray-50 focus:border-teal-500`}
+                />
+                <TextInput
+                placeholder="Amount (e.g., 25.50)"
+                keyboardType="numeric"
+                value={newExpense.amount}
+                onChangeText={(text) => setNewExpense((prev) => ({ ...prev, amount: text }))}
+                style={tw`border border-gray-300 px-3.5 py-2.5 rounded-md mb-3 text-sm bg-gray-50 focus:border-teal-500`}
+                />
+                <TextInput
+                placeholder="Category (e.g., Food)"
+                value={newExpense.category}
+                onChangeText={(text) => setNewExpense((prev) => ({ ...prev, category: text }))}
+                style={tw`border border-gray-300 px-3.5 py-2.5 rounded-md mb-3 text-sm bg-gray-50 focus:border-teal-500`}
+                />
+                <TextInput
+                placeholder="Description (Optional)"
+                value={newExpense.description}
+                onChangeText={(text) => setNewExpense((prev) => ({ ...prev, description: text }))}
+                style={tw`border border-gray-300 px-3.5 py-2.5 rounded-md mb-4 text-sm bg-gray-50 focus:border-teal-500 h-20`}
+                multiline
+                textAlignVertical="top"
+                />
+
+                <View style={tw`flex-row justify-end mt-2`}>
+                <TouchableOpacity
+                    onPress={() => {
+                    setAddExpenseModalVisible(false);
+                    setNewExpense({ title: '', amount: '', category: '', description: '' });
+                    setEditingExpenseId(null);
+                    }}
+                    style={tw`px-4 py-2.5 rounded-md mr-2 bg-gray-100 active:bg-gray-200`}
+                >
+                    <Text style={tw`text-gray-700 font-medium text-sm`}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={handleSaveExpense}
+                    style={tw`bg-teal-500 px-5 py-2.5 rounded-md shadow-sm active:bg-teal-600`}
+                >
+                    <Text style={tw`text-white font-semibold text-sm`}>
+                    {editingExpenseId ? 'Update' : 'Add Expense'}
+                    </Text>
+                </TouchableOpacity>
+                </View>
+            </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
       {/* Modal for Setting Budget */}
-      <Modal visible={budgetInputModalVisible} animationType="slide" transparent>
+      <Modal visible={budgetInputModalVisible} animationType="slide" transparent onRequestClose={() => setBudgetInputModalVisible(false)}>
         <TouchableOpacity 
-            style={tw`flex-1 justify-center items-center bg-black bg-opacity-50`}
+            style={tw`flex-1 justify-center items-center bg-black bg-opacity-60`}
             activeOpacity={1} 
-            onPressOut={Keyboard.dismiss}
+            onPressOut={() => { Keyboard.dismiss(); setBudgetInputModalVisible(false);}}
         >
-          <View style={tw`w-10/12 bg-white p-6 rounded-lg shadow-xl`}>
-            <Text style={tw`text-xl font-bold mb-4 text-center`}>Set Your Budget</Text>
-            <TextInput
-              placeholder="Enter total budget amount"
-              keyboardType="numeric"
-              value={budgetInputValue}
-              onChangeText={setBudgetInputValue}
-              style={tw`border border-gray-300 px-3 py-2 rounded mb-4 text-base`}
-            />
-            <View style={tw`flex-row justify-end mt-2`}>
-              <TouchableOpacity
-                onPress={() => {
-                    setBudgetInputModalVisible(false);
-                    // setBudgetInputValue(String(user?.budget || '')); // Reset to current budget if cancelled
-                }}
-                style={tw`px-4 py-2 rounded mr-3`}
-              >
-                <Text style={tw`text-gray-600 font-semibold`}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleSetBudget}
-                style={tw`bg-green-500 px-6 py-3 rounded shadow`}
-              >
-                <Text style={tw`text-white font-bold`}>Set Budget</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            <TouchableOpacity activeOpacity={1} style={tw`w-10/12 bg-white p-5 rounded-lg shadow-xl max-w-sm`}>
+                <Text style={tw`text-lg font-semibold mb-4 text-gray-800 text-center`}>Set Your Monthly Budget</Text>
+                <TextInput
+                placeholder="Enter total budget amount"
+                keyboardType="numeric"
+                value={budgetInputValue}
+                onChangeText={setBudgetInputValue}
+                style={tw`border border-gray-300 px-3.5 py-2.5 rounded-md mb-4 text-sm bg-gray-50 focus:border-teal-500`}
+                />
+                <View style={tw`flex-row justify-end mt-2`}>
+                <TouchableOpacity
+                    onPress={() => {
+                        setBudgetInputModalVisible(false);
+                    }}
+                    style={tw`px-4 py-2.5 rounded-md mr-2 bg-gray-100 active:bg-gray-200`}
+                >
+                    <Text style={tw`text-gray-700 font-medium text-sm`}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    onPress={handleSetBudget}
+                    style={tw`bg-green-500 px-5 py-2.5 rounded-md shadow-sm active:bg-green-600`}
+                >
+                    <Text style={tw`text-white font-semibold text-sm`}>Set Budget</Text>
+                </TouchableOpacity>
+                </View>
+            </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </SafeAreaView>

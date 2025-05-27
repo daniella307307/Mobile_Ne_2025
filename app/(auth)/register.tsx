@@ -2,20 +2,70 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
+  // StyleSheet, // Will be replaced by twrnc
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Alert,
+  ActivityIndicator, // For Button loading state
+  TextInput, // For InputField placeholder
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
-import InputField from "@/components/InputField";
-import Button from "@/components/Button";
+import tw from "twrnc"; // Import twrnc
+import { Ionicons } from '@expo/vector-icons'; // For header icon
+
+// --- Re-using Placeholder Components with twrnc styling from previous examples ---
+// You should adapt these to your actual InputField and Button components
+// or replace them with direct TextInput/TouchableOpacity if your components are not flexible.
+
+const InputField = ({ label, value, onChangeText, placeholder, error, secureTextEntry, keyboardType, autoCapitalize }: any) => {
+  const [isFocused, setIsFocused] = useState(false);
+  return (
+    <View style={tw`w-full mb-4`}>
+      {label && <Text style={tw`text-xs font-medium text-gray-600 mb-1 ml-1`}>{label}</Text>}
+      <TextInput // Using TextInput directly for styling consistency
+        style={tw`w-full h-12 bg-white rounded-lg px-4 text-sm border ${
+          isFocused ? 'border-teal-500 shadow-sm' : 'border-gray-300'
+        } focus:border-teal-500`}
+        placeholder={placeholder}
+        placeholderTextColor={tw.color('gray-400')}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize || "none"}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+      />
+      {error ? <Text style={tw`text-xs text-red-500 mt-1 ml-1`}>{error}</Text> : null}
+    </View>
+  );
+};
+
+const Button = ({ title, onPress, loading, disabled, style, textStyle }: any) => (
+  <TouchableOpacity
+    style={[
+      tw`w-full bg-teal-500 py-3.5 rounded-lg items-center justify-center shadow-md active:bg-teal-600`,
+      (disabled || loading) && tw`bg-teal-300`, // Style for disabled state
+      style, // Allow custom styles to be passed
+    ]}
+    onPress={onPress}
+    disabled={disabled || loading}
+  >
+    {loading ? (
+      <ActivityIndicator color={tw.color('white')} />
+    ) : (
+      <Text style={[tw`text-white text-base font-semibold`, textStyle]}>{title}</Text>
+    )}
+  </TouchableOpacity>
+);
+// --- End of Placeholder Components ---
+
 
 export default function RegisterScreen() {
-    const [username, setUsername] = useState("");
+  const [username, setUsername] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -27,11 +77,11 @@ export default function RegisterScreen() {
     lastName: "",
     email: "",
     password: "",
-    username:"",
+    username:"", // Keeping username error
     confirmPassword: "",
   });
 
-  const { register, loading } = useAuth();
+  const { register, loading, error: authError } = useAuth(); // Capture authError
 
   const validateForm = () => {
     let valid = true;
@@ -40,7 +90,7 @@ export default function RegisterScreen() {
       lastName: "",
       email: "",
       password: "",
-      username,
+      username: "", // Keeping username error
       confirmPassword: "",
     };
 
@@ -48,12 +98,15 @@ export default function RegisterScreen() {
       newErrors.firstName = "First name is required";
       valid = false;
     }
-
     if (!lastName.trim()) {
       newErrors.lastName = "Last name is required";
       valid = false;
     }
-
+    // Validation for username - kept as per original code
+    if (!username.trim()) {
+        newErrors.username = "Username is required";
+        valid = false;
+    }
     if (!email.trim()) {
       newErrors.email = "Email is required";
       valid = false;
@@ -61,7 +114,6 @@ export default function RegisterScreen() {
       newErrors.email = "Email is invalid";
       valid = false;
     }
-
     if (!password) {
       newErrors.password = "Password is required";
       valid = false;
@@ -69,12 +121,10 @@ export default function RegisterScreen() {
       newErrors.password = "Password must be at least 6 characters";
       valid = false;
     }
-
     if (password !== confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match";
       valid = false;
     }
-
     setErrors(newErrors);
     return valid;
   };
@@ -82,49 +132,52 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (validateForm()) {
       try {
+        
         const userData = {
-          firstname: firstName,
+          firstname: firstName, 
           lastname: lastName,
           email,
           password,
-          username,
+          username, 
           budget: 0,
         };
-        console.log("Attempting registration with:", userData);
-        await register(firstName, lastName, email, password, userData); // Updated signature
-      } catch (error) {
+        
+        await register(firstName, lastName, email, password, userData);
+      } catch (error) { // This catch is fine, works with authError from hook
         const err = error as Error;
-        console.error("Registration error:", err);
+        console.error("Registration error in component:", err);
         const errorMessage = err.message.includes("Network Error")
           ? "Network error: Please check your internet connection and try again."
-          : err.message.includes("Email already exists")
+          : err.message.includes("Email already exists") || err.message.includes("Email already in use")
           ? "This email is already registered. Please use a different email."
           : err.message || "An unexpected error occurred. Please try again.";
         Alert.alert("Registration Error", errorMessage);
       }
     } else {
-      Alert.alert("Validation Error", "Please correct the errors in the form.");
+      // Inline errors are displayed by InputField, no separate Alert needed
     }
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={tw`flex-1 bg-gray-100`} // Main container background
       behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 20} // Adjusted for Android
+      // keyboardVerticalOffset={Platform.OS === "ios" ? 64 : 20} // Keep if needed
     >
       <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled" // Ensures taps dismiss the keyboard
+        contentContainerStyle={tw`flex-grow justify-center px-6 py-8`} // ScrollView styling
+        keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>
-            Sign up to start managing parking spaces
+        <View style={tw`items-center mb-8`}> {/* Header container */}
+          <Ionicons name="person-add-outline" size={56} color={tw.color('teal-500')} />
+          <Text style={tw`text-2xl font-bold text-teal-600 mt-3`}>Create Account</Text>
+          <Text style={tw`text-sm text-gray-500 mt-1 text-center`}>
+            {/* Subtitle updated for expense tracker context, but can be generic */}
+            Sign up to start tracking your expenses!
           </Text>
         </View>
 
-        <View style={styles.formContainer}>
+        <View style={tw`w-full`}> {/* Form container */}
           <InputField
             label="First Name"
             value={firstName}
@@ -133,7 +186,6 @@ export default function RegisterScreen() {
             error={errors.firstName}
             autoCapitalize="words"
           />
-
           <InputField
             label="Last Name"
             value={lastName}
@@ -142,36 +194,32 @@ export default function RegisterScreen() {
             error={errors.lastName}
             autoCapitalize="words"
           />
-
-          <InputField
+          <InputField // Username field kept
             label="Username"
             value={username}
             onChangeText={setUsername}
-            placeholder="Enter your username"
+            placeholder="Choose a username"
             error={errors.username}
-            autoCapitalize="words"
+            autoCapitalize="none"
           />
-
           <InputField
             label="Email"
             value={email}
             onChangeText={setEmail}
-            placeholder="Enter your email"
+            placeholder="you@example.com"
             keyboardType="email-address"
             error={errors.email}
-            autoCapitalize="none" // Prevents auto-capitalization on mobile
+            autoCapitalize="none"
           />
-
           <InputField
             label="Password"
             value={password}
             onChangeText={setPassword}
-            placeholder="Create a password"
+            placeholder="Create a strong password (min. 6 chars)"
             secureTextEntry
             error={errors.password}
-            autoCapitalize="none" // Prevents auto-capitalization on mobile
+            autoCapitalize="none"
           />
-
           <InputField
             label="Confirm Password"
             value={confirmPassword}
@@ -179,150 +227,26 @@ export default function RegisterScreen() {
             placeholder="Confirm your password"
             secureTextEntry
             error={errors.confirmPassword}
-            autoCapitalize="none" // Prevents auto-capitalization on mobile
+            autoCapitalize="none"
           />
-
-          <View style={styles.roleContainer}>
-            <Text style={styles.roleLabel}>Register as:</Text>
-            <View style={styles.roleButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === "user" && styles.roleButtonActive,
-                ]}
-                onPress={() => setRole("user")}
-                accessibilityRole="button" // Improves accessibility on mobile
-                accessibilityLabel="Register as user"
-              >
-                <Text
-                  style={[
-                    styles.roleButtonText,
-                    role === "user" && styles.roleButtonTextActive,
-                  ]}
-                >
-                  user
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.roleButton,
-                  role === "admin" && styles.roleButtonActive,
-                ]}
-                onPress={() => setRole("admin")}
-                accessibilityRole="button" // Improves accessibility on mobile
-                accessibilityLabel="Register as Admin"
-              >
-                <Text
-                  style={[
-                    styles.roleButtonText,
-                    role === "admin" && styles.roleButtonTextActive,
-                  ]}
-                >
-                  Admin
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          {authError && <Text style={tw`text-sm text-red-500 mb-3 text-center`}>{authError}</Text>}
 
           <Button
-            title="Sign Up"
+            title="Create Account"
             onPress={handleRegister}
             loading={loading}
-            disabled={loading} // Disable button during loading
-            style={styles.registerButton}
+            // style={tw`mt-1`} // Button already has some top margin due to last InputField's mb-4
           />
 
-          <View style={styles.footerContainer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <Link href="/login" asChild>
-              <TouchableOpacity>
-                <Text style={styles.loginText}>Sign In</Text>
-              </TouchableOpacity>
-            </Link>
+          <View style={tw`flex-row justify-center mt-6 items-center`}> {/* Footer container */}
+            <Text style={tw`text-sm text-gray-600`}>Already have an account? </Text>
+            {/* Using router.replace for consistency if Link caused issues */}
+            <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
+              <Text style={tw`text-sm text-teal-600 font-semibold`}>Log In</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  scrollContainer: {
-    flexGrow: 1,
-    padding: 24,
-  },
-  headerContainer: {
-    marginBottom: 24,
-    alignItems: "center",
-  },
-  title: {
-    fontFamily: "Inter-Bold",
-    fontSize: 28,
-    color: "#3071E8",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontFamily: "Inter-Regular",
-    fontSize: 16,
-    color: "#666",
-    textAlign: "center",
-  },
-  formContainer: {
-    width: "100%",
-  },
-  roleContainer: {
-    marginBottom: 24,
-  },
-  roleLabel: {
-    fontSize: 14,
-    color: "#333",
-    marginBottom: 8,
-    fontWeight: "500",
-  },
-  roleButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  roleButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
-    borderRadius: 8,
-    alignItems: "center",
-    marginRight: 8,
-  },
-  roleButtonActive: {
-    borderColor: "#3071E8",
-    backgroundColor: "rgba(48, 113, 232, 0.1)",
-  },
-  roleButtonText: {
-    color: "#666",
-    fontWeight: "500",
-  },
-  roleButtonTextActive: {
-    color: "#3071E8",
-  },
-  registerButton: {
-    marginTop: 8,
-  },
-  footerContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  footerText: {
-    fontFamily: "Inter-Regular",
-    color: "#666",
-  },
-  loginText: {
-    fontFamily: "Inter-Medium",
-    color: "#3071E8",
-  },
-});

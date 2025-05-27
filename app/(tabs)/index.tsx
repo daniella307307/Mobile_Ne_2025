@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -6,20 +6,21 @@ import {
   Text,
   TouchableOpacity,
   ActivityIndicator,
-  // StyleSheet, // No longer needed if all styles are in tw
 } from 'react-native';
 import tw from 'twrnc';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpenses } from '@/hooks/useExpense';
-import { Expense } from '@/services/expenseService'; // Make sure this path is correct
+import { Expense } from '@/services/expenseService';
+import { router } from 'expo-router'; // Ensure this is correctly imported
+import ExpenseDetailModal from '../modal/expenseDetailsModal';
 
 // Define a type for aggregated category data
 type CategorySpending = {
   category: string;
   totalAmount: number;
   count: number;
-  color: string; // For the chart
+  color: string;
 };
 
 // Helper for calculating category spending
@@ -29,7 +30,7 @@ const aggregateExpensesByCategory = (expenses: Expense[]): CategorySpending[] =>
     if (!categoryMap[expense.category]) {
       categoryMap[expense.category] = { totalAmount: 0, count: 0 };
     }
-    categoryMap[expense.category].totalAmount += Number(expense.amount); // Ensure amount is number
+    categoryMap[expense.category].totalAmount += Number(expense.amount);
     categoryMap[expense.category].count += 1;
   });
 
@@ -45,16 +46,30 @@ const aggregateExpensesByCategory = (expenses: Expense[]): CategorySpending[] =>
     .map(([category, data], index) => ({
       category,
       ...data,
-      color: categoryColors[index % categoryColors.length] || (tw.color('gray-400') as string), // Ensure string type
+      color: categoryColors[index % categoryColors.length] || (tw.color('gray-400') as string),
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
 };
 
-
-const DashboardScreen = ({ navigation }: { navigation: any }) => {
+// Remove navigation prop from the component's props definition
+// const DashboardScreen = ({ navigation }: { navigation: any }) => {
+const DashboardScreen = () => {
   const { user, loading: authLoading } = useAuth();
   const userId = user?.id ? String(user.id) : '';
-  const { expenses, loading: expensesLoading } = useExpenses(userId); // Removed refreshExpenses if not used directly here
+  const { expenses, loading: expensesLoading } = useExpenses(userId);
+
+  const [isExpenseModalVisible, setIsExpenseModalVisible] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+
+  const handleOpenExpenseModal = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setIsExpenseModalVisible(true);
+  };
+
+  const handleCloseExpenseModal = () => {
+    setIsExpenseModalVisible(false);
+    setSelectedExpense(null);
+  };
 
   const totalSpent = useMemo(
     () => expenses.reduce((sum, exp) => sum + Number(exp.amount), 0),
@@ -62,13 +77,12 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
   );
 
   const userBudget = user?.budget ?? 0;
-  // Show 'N/A' or similar if no budget set or budget is 0, otherwise calculate remaining
   const budgetRemainingFormatted = useMemo(() => {
     if (userBudget > 0) {
       const remaining = userBudget - totalSpent;
       return `$${remaining.toFixed(2)}`;
     }
-    return 'N/A'; // Or 'Set Budget'
+    return 'N/A';
   }, [userBudget, totalSpent]);
 
   const isOverBudget = useMemo(() => {
@@ -76,7 +90,7 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
   }, [userBudget, totalSpent]);
 
   const recentExpenses = useMemo(
-    () => expenses.slice(0, 3), // Show fewer recent expenses for a cleaner look, e.g., 3
+    () => expenses.slice(0, 3),
     [expenses]
   );
 
@@ -84,7 +98,7 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
     () => aggregateExpensesByCategory(expenses),
     [expenses]
   );
-  
+
   const maxCategorySpent = useMemo(
     () => Math.max(...categorySpending.map(c => c.totalAmount), 0),
     [categorySpending]
@@ -101,18 +115,16 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
 
   return (
     <SafeAreaView style={tw`flex-1 bg-gray-100`}>
-      <ScrollView contentContainerStyle={tw`p-4 pb-24 mt-12`}> {/* Adjusted padding */}
-        {/* Header */}
+      <ScrollView contentContainerStyle={tw`p-4 pb-24 mt-12`}>
         <View style={tw`mb-6`}>
-          <Text style={tw`text-2xl font-semibold text-gray-800`}> {/* Slightly smaller, bolder */}
+          <Text style={tw`text-2xl font-semibold text-gray-800`}>
             Hello, {user?.firstname || 'User'}!
           </Text>
-          <Text style={tw`text-sm text-gray-600`}> {/* Softer subtext */}
+          <Text style={tw`text-sm text-gray-600`}>
             Here's your financial overview.
           </Text>
         </View>
 
-        {/* Summary Cards Row */}
         <View style={tw`flex-row flex-wrap justify-between -mx-1.5 mb-2`}>
           <SummaryCard
             title="Total Spent"
@@ -127,11 +139,15 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
             accentColorName={budgetRemainingFormatted === 'N/A' ? 'gray' : (isOverBudget ? "red" : "green")}
           />
         </View>
-        {/* Single Full Width Card or Prompt */}
         {(!userBudget || userBudget === 0) && (
-             <TouchableOpacity 
+             <TouchableOpacity
                 style={tw`bg-white p-4 rounded-lg shadow-sm mb-4 items-center justify-center border border-teal-300 flex-row`}
-                onPress={() => navigation.navigate('History', { screen: 'History', params: { openSetBudgetModal: true }})} // Ensure History.tsx handles openSetBudgetModal
+                // Use router.push and pass params. Assuming History.tsx is at '/(tabs)/history'
+                // and it can handle 'openSetBudgetModal' as a query parameter.
+                onPress={() => router.push({
+                  pathname: '/(tabs)/history', // Adjust if your path is different
+                  params: { openSetBudgetModal: 'true' },
+                })}
             >
                 <Ionicons name="calculator-outline" size={22} color={tw.color('teal-600')} style={tw`mr-2`} />
                 <Text style={tw`text-sm font-medium text-teal-600 text-center`}>Set Your Monthly Budget</Text>
@@ -145,14 +161,12 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
             style={tw`mb-5`}
           />
 
-
-        {/* Spending by Category */}
         {categorySpending.length > 0 && (
-          <View style={tw`bg-white p-4 rounded-lg shadow-sm mb-5`}> {/* Softer shadow, less padding */}
+          <View style={tw`bg-white p-4 rounded-lg shadow-sm mb-5`}>
             <Text style={tw`text-lg font-semibold text-gray-700 mb-3`}>
               Spending by Category
             </Text>
-            {categorySpending.slice(0,4).map((item) => ( // Show top 4
+            {categorySpending.slice(0,4).map((item) => (
               <View key={item.category} style={tw`mb-2.5`}>
                 <View style={tw`flex-row justify-between items-center mb-1`}>
                   <Text style={tw`text-xs font-medium text-gray-600`}>{item.category}</Text>
@@ -160,7 +174,7 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
                     ${item.totalAmount.toFixed(2)}
                   </Text>
                 </View>
-                <View style={tw`h-2 bg-gray-200 rounded-full overflow-hidden`}> {/* Thinner bar */}
+                <View style={tw`h-2 bg-gray-200 rounded-full overflow-hidden`}>
                   <View
                     style={[
                       tw`h-2 rounded-full`,
@@ -171,24 +185,29 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
               </View>
             ))}
             {categorySpending.length > 4 && (
-                <TouchableOpacity onPress={() => navigation.navigate('AnalyticsScreen')} /* Assume you have one */ >
+                // Use router.push. Assuming AnalyticsScreen is at '/analytics'
+                <TouchableOpacity onPress={() => router.push('/(tabs)/history')} /* Adjust path if needed */ >
                     <Text style={tw`text-xs text-teal-500 font-medium text-right mt-1.5`}>View All...</Text>
                 </TouchableOpacity>
             )}
           </View>
         )}
 
-        {/* Recent Expenses */}
         {recentExpenses.length > 0 && (
           <View style={tw`bg-white p-4 rounded-lg shadow-sm mb-5`}>
             <Text style={tw`text-lg font-semibold text-gray-700 mb-2`}>
               Recent Transactions
             </Text>
             {recentExpenses.map((expense) => (
-              <RecentExpenseItem key={expense.id} expense={expense} />
+              <RecentExpenseItem
+                key={expense.id}
+                expense={expense}
+                onPress={() => handleOpenExpenseModal(expense)}
+              />
             ))}
              {expenses.length > recentExpenses.length && (
-                 <TouchableOpacity onPress={() => navigation.navigate('History')} >
+                 // Use router.push. Assuming History is at '/(tabs)/history'
+                 <TouchableOpacity onPress={() => router.push('/(tabs)/history')} /* Adjust path if needed */ >
                     <Text style={tw`text-xs text-teal-500 font-medium text-center mt-2`}>View All Expenses</Text>
                 </TouchableOpacity>
              )}
@@ -204,16 +223,25 @@ const DashboardScreen = ({ navigation }: { navigation: any }) => {
          )}
       </ScrollView>
 
-      {/* Floating Add Button */}
       <TouchableOpacity
-        onPress={() => navigation.navigate('History', { screen: 'History', params: { openAddModal: true }})}
-        style={tw`absolute bottom-5 right-5 bg-teal-600 p-3.5 rounded-full shadow-lg elevation-5`} // Slightly smaller, adjusted shadow
+        onPress={() => router.push('/(tabs)/history')} // This was already correct
+        style={tw`absolute bottom-5 right-5 bg-teal-600 p-3.5 rounded-full shadow-lg elevation-5`}
       >
         <Ionicons name="add" size={26} color="white" />
       </TouchableOpacity>
+
+      {selectedExpense && (
+        <ExpenseDetailModal
+          visible={isExpenseModalVisible}
+          expense={selectedExpense}
+          onClose={handleCloseExpenseModal}
+        />
+      )}
     </SafeAreaView>
   );
 };
+
+// SummaryCard, SummaryCardFullWidth, RecentExpenseItem components remain the same
 
 // Reusable Summary Card Component
 const SummaryCard = ({ title, value, iconName, accentColorName }: {
@@ -233,13 +261,12 @@ const SummaryCard = ({ title, value, iconName, accentColorName }: {
   const selectedAccent = accentColors[accentColorName] || accentColors.gray;
 
   return (
-    // Adjusted width for better spacing, using mx-1.5 on parent for gutter
-    <View style={tw`w-[48%] bg-white p-3 rounded-lg shadow-sm mb-3 border-l-4 ${selectedAccent.border}`}>
+    <View style={[tw`w-[48%] bg-white p-3 rounded-lg shadow-sm mb-3 border-l-4`, tw`${selectedAccent.border}`]}>
       <View style={tw`flex-row items-center mb-0.5`}>
         <Ionicons name={iconName} size={18} color={selectedAccent.icon} style={tw`mr-1.5`} />
         <Text style={tw`text-xs font-medium text-gray-500`}>{title}</Text>
       </View>
-      <Text style={tw`text-xl font-bold ${selectedAccent.textValue}`}>{value}</Text>
+      <Text style={[tw`text-xl font-bold`, tw`${selectedAccent.textValue}`]}>{value}</Text>
     </View>
   );
 };
@@ -250,7 +277,7 @@ const SummaryCardFullWidth = ({ title, value, iconName, accentColorName, style }
     value: string;
     iconName: keyof typeof Ionicons.glyphMap;
     accentColorName: 'teal' | 'green' | 'red' | 'cyan' | 'orange' | 'gray';
-    style?: any; // For additional styles like margin
+    style?: any;
   }) => {
     const accentColors = {
         teal:  { border: 'border-teal-500',  icon: tw.color('teal-500'),  textValue: 'text-teal-700' },
@@ -263,31 +290,33 @@ const SummaryCardFullWidth = ({ title, value, iconName, accentColorName, style }
     const selectedAccent = accentColors[accentColorName] || accentColors.gray;
 
     return (
-      <View style={[tw`bg-white p-3 rounded-lg shadow-sm border-l-4 ${selectedAccent.border}`, style]}>
+      <View style={[tw`bg-white p-3 rounded-lg shadow-sm border-l-4`, tw`${selectedAccent.border}`, style]}>
         <View style={tw`flex-row items-center mb-0.5`}>
           <Ionicons name={iconName} size={18} color={selectedAccent.icon} style={tw`mr-1.5`} />
           <Text style={tw`text-xs font-medium text-gray-500`}>{title}</Text>
         </View>
-        <Text style={tw`text-xl font-bold ${selectedAccent.textValue}`}>{value}</Text>
+        <Text style={[tw`text-xl font-bold`, tw`${selectedAccent.textValue}`]}>{value}</Text>
       </View>
     );
 };
 
 
 // Reusable Recent Expense Item Component
-const RecentExpenseItem = ({ expense }: { expense: Expense }) => {
+const RecentExpenseItem = ({ expense, onPress }: { expense: Expense; onPress: () => void }) => {
   return (
-    <View style={tw`flex-row justify-between items-center py-2.5 border-b border-gray-100 last:border-b-0`}>
-      <View style={tw`flex-1 mr-2`}>
-        <Text style={tw`text-sm font-medium text-gray-700`}>{expense.title}</Text>
-        <Text style={tw`text-xs text-gray-500`}>
-          {expense.category} - {expense.createdAt ? new Date(expense.createdAt).toLocaleDateString() : 'N/A'}
+    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+      <View style={tw`flex-row justify-between items-center py-2.5 border-b border-gray-100 last:border-b-0`}>
+        <View style={tw`flex-1 mr-2`}>
+          <Text style={tw`text-sm font-medium text-gray-700`}>{expense.title}</Text>
+          <Text style={tw`text-xs text-gray-500`}>
+            {expense.category} - {expense.createdAt ? new Date(expense.createdAt).toLocaleDateString() : 'N/A'}
+          </Text>
+        </View>
+        <Text style={tw`text-sm font-semibold text-teal-600`}>
+          ${Number(expense.amount).toFixed(2)}
         </Text>
       </View>
-      <Text style={tw`text-sm font-semibold text-teal-600`}>
-        ${Number(expense.amount).toFixed(2)}
-      </Text>
-    </View>
+    </TouchableOpacity>
   );
 };
 

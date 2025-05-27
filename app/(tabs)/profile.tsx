@@ -28,8 +28,6 @@ export default function ProfileScreen({ navigation }: { navigation: any }) { // 
   };
 
   if (!user) {
-    // Optional: Show a loading state or a message if user data is being fetched
-    // For now, returning null is fine if useAuth handles the loading state before rendering ProfileScreen
     return null;
   }
 

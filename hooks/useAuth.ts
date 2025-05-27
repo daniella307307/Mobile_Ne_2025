@@ -50,7 +50,7 @@ export function useAuth() {
       setUser(user);
       setToken(token);
       await persistAuth(user, token);
-      location.href = '/'; // Redirect to home page after registration
+      window.location.href = '/'; // Redirect to home page after registration
     } catch (err: any) {
       setError(err.message || 'Registration failed');
     } finally {
@@ -78,6 +78,7 @@ export function useAuth() {
     setToken(null);
     await AsyncStorage.removeItem('user');
     await AsyncStorage.removeItem('token');
+    location.href = '/(auth)/login'; // Redirect to login page after logout
   };
 
   return {
@@ -89,6 +90,6 @@ export function useAuth() {
     register,
     logout,
     updateProfile,
-    isAuthenticated: !user,
+    isAuthenticated: !!user,
   };
 }
