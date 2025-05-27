@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthService } from '../services/authService';
 import { User } from '@/services/types';
+import { router } from 'expo-router';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -78,7 +79,7 @@ export function useAuth() {
     setToken(null);
     await AsyncStorage.removeItem('user');
     await AsyncStorage.removeItem('token');
-    location.href = '/(auth)/login'; // Redirect to login page after logout
+    router.push('/(auth)/login'); 
   };
 
   return {

@@ -87,12 +87,12 @@ const History = () => {
       if (currentTotalSpent >= userBudget) {
         Alert.alert(
           'Budget Exceeded',
-          `You have spent $${currentTotalSpent.toFixed(2)} and exceeded your budget of $${userBudget.toFixed(2)}.`
+          `You have spent ${currentTotalSpent.toFixed(2)}RWF and exceeded your budget of ${userBudget.toFixed(2)}RWF.`
         );
       } else {
         Alert.alert(
           'Budget Warning',
-          `You have spent $${currentTotalSpent.toFixed(2)} which is ${((currentTotalSpent / userBudget) * 100).toFixed(0)}% of your budget ($${userBudget.toFixed(2)}).`
+          `You have spent ${currentTotalSpent.toFixed(2)}RWF which is ${((currentTotalSpent / userBudget) * 100).toFixed(0)}% of your budget (${userBudget.toFixed(2)}RWF).`
         );
       }
     }
@@ -185,7 +185,7 @@ const History = () => {
     Keyboard.dismiss();
     try {
       await updateProfile({ budget: newBudgetValue });
-      Alert.alert('Budget Updated', `Your new budget is $${newBudgetValue.toFixed(2)}`);
+      Alert.alert('Budget Updated', `Your new budget is ${newBudgetValue.toFixed(2)}RWF`);
       setBudgetInputModalVisible(false);
       // budgetInputValue is pre-filled, no need to clear here unless desired.
       checkBudgetNotification(totalSpent); // Check with current totalSpent and new budget
@@ -230,7 +230,7 @@ const History = () => {
         <View style={tw`flex-row justify-between items-center mb-1.5`}>
           <Text style={tw`text-base font-semibold text-gray-700`}>
             Monthly Budget: 
-            <Text style={tw`text-teal-600`}> ${userBudget.toFixed(2)}</Text>
+            <Text style={tw`text-teal-600`}> {userBudget.toFixed(2)}RWF</Text>
           </Text>
           <TouchableOpacity
             onPress={() => setBudgetInputModalVisible(true)}
@@ -240,9 +240,9 @@ const History = () => {
           </TouchableOpacity>
         </View>
         <View style={tw`flex-row justify-between`}>
-            <Text style={tw`text-sm text-gray-600`}>Spent: ${totalSpent.toFixed(2)}</Text>
+            <Text style={tw`text-sm text-gray-600`}>Spent: {totalSpent.toFixed(2)}RWF</Text>
             <Text style={tw`text-sm font-medium ${remainingBudget < 0 ? 'text-red-500' : 'text-green-600'}`}>
-            Remaining: ${remainingBudget.toFixed(2)}
+            Remaining: {remainingBudget.toFixed(2)} RWF
             </Text>
         </View>
         {userBudget > 0 && totalSpent > userBudget && (
@@ -261,7 +261,7 @@ const History = () => {
                     <Text style={tw`text-base font-semibold text-gray-800`}>{item.title}</Text>
                     {item.description ? <Text style={tw`text-xs text-gray-500 mt-0.5`}>{item.description}</Text> : null}
                 </View>
-                <Text style={tw`text-base font-bold text-teal-600`}>${Number(item.amount).toFixed(2)}</Text>
+                <Text style={tw`text-base font-bold text-teal-600`}>{Number(item.amount).toFixed(2)}RWF</Text>
             </View>
             <View style={tw`flex-row justify-between items-center mt-2 pt-2 border-t border-gray-100`}>
                 <View>

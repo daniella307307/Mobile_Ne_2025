@@ -69,7 +69,7 @@ export default function ProfileScreen({ navigation }: { navigation: any }) { // 
         <InfoRow 
           icon={<DollarSign size={20} color={tw.color('teal-600')} />} 
           label="Monthly Budget" 
-          value={user.budget !== undefined ? `$${Number(user.budget).toFixed(2)}` : 'Not Set'} 
+          value={user.budget !== undefined ? `${Number(user.budget).toFixed(2)} RWF` : 'Not Set'} 
           isLast={true} // To remove bottom border on the last item
         />
       </View>

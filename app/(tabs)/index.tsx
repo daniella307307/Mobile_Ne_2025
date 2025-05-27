@@ -80,7 +80,7 @@ const DashboardScreen = () => {
   const budgetRemainingFormatted = useMemo(() => {
     if (userBudget > 0) {
       const remaining = userBudget - totalSpent;
-      return `$${remaining.toFixed(2)}`;
+      return `${remaining.toFixed(2)}RWF`;
     }
     return 'N/A';
   }, [userBudget, totalSpent]);
@@ -128,7 +128,7 @@ const DashboardScreen = () => {
         <View style={tw`flex-row flex-wrap justify-between -mx-1.5 mb-2`}>
           <SummaryCard
             title="Total Spent"
-            value={`$${totalSpent.toFixed(2)}`}
+            value={`${totalSpent.toFixed(2)}RWF`}
             iconName="wallet-outline"
             accentColorName="teal"
           />
@@ -142,10 +142,10 @@ const DashboardScreen = () => {
         {(!userBudget || userBudget === 0) && (
              <TouchableOpacity
                 style={tw`bg-white p-4 rounded-lg shadow-sm mb-4 items-center justify-center border border-teal-300 flex-row`}
-                // Use router.push and pass params. Assuming History.tsx is at '/(tabs)/history'
+                // Use router.push and pass params. Assuming analytics.tsx is at '/(tabs)/analytics'
                 // and it can handle 'openSetBudgetModal' as a query parameter.
                 onPress={() => router.push({
-                  pathname: '/(tabs)/history', // Adjust if your path is different
+                  pathname: '/(tabs)/analytics', // Adjust if your path is different
                   params: { openSetBudgetModal: 'true' },
                 })}
             >
@@ -171,7 +171,7 @@ const DashboardScreen = () => {
                 <View style={tw`flex-row justify-between items-center mb-1`}>
                   <Text style={tw`text-xs font-medium text-gray-600`}>{item.category}</Text>
                   <Text style={tw`text-xs font-semibold text-teal-600`}>
-                    ${item.totalAmount.toFixed(2)}
+                    {item.totalAmount.toFixed(2)}RWF
                   </Text>
                 </View>
                 <View style={tw`h-2 bg-gray-200 rounded-full overflow-hidden`}>
@@ -186,7 +186,7 @@ const DashboardScreen = () => {
             ))}
             {categorySpending.length > 4 && (
                 // Use router.push. Assuming AnalyticsScreen is at '/analytics'
-                <TouchableOpacity onPress={() => router.push('/(tabs)/history')} /* Adjust path if needed */ >
+                <TouchableOpacity onPress={() => router.push('/(tabs)/analytics')} /* Adjust path if needed */ >
                     <Text style={tw`text-xs text-teal-500 font-medium text-right mt-1.5`}>View All...</Text>
                 </TouchableOpacity>
             )}
@@ -206,8 +206,8 @@ const DashboardScreen = () => {
               />
             ))}
              {expenses.length > recentExpenses.length && (
-                 // Use router.push. Assuming History is at '/(tabs)/history'
-                 <TouchableOpacity onPress={() => router.push('/(tabs)/history')} /* Adjust path if needed */ >
+                 // Use router.push. Assuming analytics is at '/(tabs)/analytics'
+                 <TouchableOpacity onPress={() => router.push('/(tabs)/analytics')} /* Adjust path if needed */ >
                     <Text style={tw`text-xs text-teal-500 font-medium text-center mt-2`}>View All Expenses</Text>
                 </TouchableOpacity>
              )}
@@ -224,7 +224,7 @@ const DashboardScreen = () => {
       </ScrollView>
 
       <TouchableOpacity
-        onPress={() => router.push('/(tabs)/history')} // This was already correct
+        onPress={() => router.push('/(tabs)/analytics')} // This was already correct
         style={tw`absolute bottom-5 right-5 bg-teal-600 p-3.5 rounded-full shadow-lg elevation-5`}
       >
         <Ionicons name="add" size={26} color="white" />
@@ -313,7 +313,7 @@ const RecentExpenseItem = ({ expense, onPress }: { expense: Expense; onPress: ()
           </Text>
         </View>
         <Text style={tw`text-sm font-semibold text-teal-600`}>
-          ${Number(expense.amount).toFixed(2)}
+          {Number(expense.amount).toFixed(2)}RWF
         </Text>
       </View>
     </TouchableOpacity>

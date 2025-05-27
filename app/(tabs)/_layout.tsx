@@ -34,9 +34,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="history"
+        name="analytics"
         options={{
-          title: 'History',
+          title: 'analytics',
           tabBarIcon: ({ color }) => <LucideClock color={color} />,
         }}
       />
